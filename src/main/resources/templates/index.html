@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title th:text="${appName}">BidMart Authentication Service</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 600px; margin: 60px auto; padding: 0 20px; color: #333; }
+        h1 { color: #1a73e8; }
+        .card { border: 1px solid #ddd; border-radius: 8px; padding: 20px; margin: 16px 0; }
+        .badge { display: inline-block; padding: 4px 12px; border-radius: 20px;
+                 background: #e8f5e9; color: #2e7d32; font-weight: bold; }
+        .stat { font-size: 2em; font-weight: bold; color: #1a73e8; }
+    </style>
+</head>
+<body>
+    <h1 th:text="${appName}">BidMart Authentication Service</h1>
+
+    <div class="card">
+        <p>Service Status: <span class="badge" th:text="${status}">UP</span></p>
+        <p>Database: <span class="badge">Connected</span></p>
+    </div>
+
+    <div class="card">
+        <p>Registered Users</p>
+        <p class="stat" th:text="${userCount}">0</p>
+    </div>
+
+    <div class="card">
+        <p><strong>Module:</strong> Authentication &amp; User Management</p>
+        <p><strong>Platform:</strong> BidMart — Real-time Auction &amp; Marketplace</p>
+    </div>
+</body>
+</html>
