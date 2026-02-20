@@ -9,6 +9,10 @@
 
     <module name="NewlineAtEndOfFile"/>
 
+    <module name="LineLength">
+        <property name="max" value="120"/>
+    </module>
+
     <module name="TreeWalker">
 
         <!-- Naming Conventions -->
@@ -27,9 +31,6 @@
         <module name="UnusedImports"/>
 
         <!-- Size -->
-        <module name="LineLength">
-            <property name="max" value="120"/>
-        </module>
         <module name="MethodLength"/>
         <module name="ParameterNumber"/>
 
