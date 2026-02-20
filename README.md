@@ -19,7 +19,7 @@ This spins up both the app and a PostgreSQL database, no extra setup needed.
 docker compose up --build
 ```
 
-Then open http://localhost:8080
+Then open http://localhost:8081
 
 To stop:
 ```bash
