@@ -1,0 +1,34 @@
+services:
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: bidmart-auth-db
+    environment:
+      POSTGRES_DB: bidmart_auth
+      POSTGRES_USER: bidmart
+      POSTGRES_PASSWORD: bidmart123
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U bidmart -d bidmart_auth" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build: .
+    container_name: bidmart-auth-app
+    ports:
+      - "8080:8080"
+    environment:
+      DATABASE_URL: jdbc:postgresql://postgres:5432/bidmart_auth
+      DATABASE_USERNAME: bidmart
+      DATABASE_PASSWORD: bidmart123
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
