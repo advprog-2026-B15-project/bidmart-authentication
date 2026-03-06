@@ -1,1 +1,1 @@
-web: java -jar target/app.jar
+web: java -jar build/libs/bidmart-authentication-0.0.1-SNAPSHOT.jar
