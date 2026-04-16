@@ -12,9 +12,8 @@ version = "0.0.1-SNAPSHOT"
 description = "bidmart-authentication"
 
 java {
-    toolchain {
-        languageVersion = JavaLanguageVersion.of(21)
-    }
+    sourceCompatibility = JavaVersion.VERSION_21
+    targetCompatibility = JavaVersion.VERSION_21
 }
 
 configurations {
@@ -48,6 +47,7 @@ dependencies {
     testImplementation("org.springframework.security:spring-security-test")
     testRuntimeOnly("com.h2database:h2")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+    implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.6")
 }
 
 checkstyle {
@@ -83,5 +83,5 @@ sonarqube {
 
 
 tasks.register("stage") {
-    dependsOn("build")
+    dependsOn("assemble")
 }

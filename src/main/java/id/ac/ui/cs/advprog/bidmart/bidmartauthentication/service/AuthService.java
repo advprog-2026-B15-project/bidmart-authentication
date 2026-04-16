@@ -1,11 +1,16 @@
 package id.ac.ui.cs.advprog.bidmart.bidmartauthentication.service;
 
 import id.ac.ui.cs.advprog.bidmart.bidmartauthentication.dto.AuthResponse;
+import id.ac.ui.cs.advprog.bidmart.bidmartauthentication.dto.ForgotPasswordRequest;
 import id.ac.ui.cs.advprog.bidmart.bidmartauthentication.dto.LoginRequest;
+import id.ac.ui.cs.advprog.bidmart.bidmartauthentication.dto.RefreshTokenRequest;
 import id.ac.ui.cs.advprog.bidmart.bidmartauthentication.dto.RegisterRequest;
 import id.ac.ui.cs.advprog.bidmart.bidmartauthentication.dto.RegisterResponse;
+import id.ac.ui.cs.advprog.bidmart.bidmartauthentication.dto.ResetPasswordRequest;
+import id.ac.ui.cs.advprog.bidmart.bidmartauthentication.model.PasswordResetToken;
 import id.ac.ui.cs.advprog.bidmart.bidmartauthentication.model.User;
 import id.ac.ui.cs.advprog.bidmart.bidmartauthentication.model.VerificationToken;
+import id.ac.ui.cs.advprog.bidmart.bidmartauthentication.repository.PasswordResetTokenRepository;
 import id.ac.ui.cs.advprog.bidmart.bidmartauthentication.repository.UserRepository;
 import id.ac.ui.cs.advprog.bidmart.bidmartauthentication.repository.VerificationTokenRepository;
 import org.slf4j.Logger;
@@ -16,6 +21,9 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
@@ -24,23 +32,31 @@ public class AuthService {
 
     private static final Logger LOG = LoggerFactory.getLogger(AuthService.class);
     private static final int TOKEN_EXPIRY_HOURS = 24;
+    private static final int RESET_TOKEN_EXPIRY_MINUTES = 30;
+    private static final String HASH_ALGORITHM = "SHA-256";
 
     private final UserRepository userRepository;
     private final VerificationTokenRepository tokenRepository;
+    private final PasswordResetTokenRepository passwordResetTokenRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
     private final AuthenticationManager authenticationManager;
+    private final RefreshTokenService refreshTokenService;
 
     public AuthService(UserRepository userRepository,
                        VerificationTokenRepository tokenRepository,
+                       PasswordResetTokenRepository passwordResetTokenRepository,
                        PasswordEncoder passwordEncoder,
                        JwtService jwtService,
-                       AuthenticationManager authenticationManager) {
+                       AuthenticationManager authenticationManager,
+                       RefreshTokenService refreshTokenService) {
         this.userRepository = userRepository;
         this.tokenRepository = tokenRepository;
+        this.passwordResetTokenRepository = passwordResetTokenRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtService = jwtService;
         this.authenticationManager = authenticationManager;
+        this.refreshTokenService = refreshTokenService;
     }
 
     @Transactional
@@ -60,7 +76,6 @@ public class AuthService {
         VerificationToken verificationToken = new VerificationToken(rawToken, user, expiresAt);
         tokenRepository.save(verificationToken);
 
-        // Mocked email: log the token so it is visible without a real mail server
         LOG.info("[MOCK EMAIL] Verification token for {}: {}", user.getEmail(), rawToken);
 
         return new RegisterResponse(
@@ -85,11 +100,76 @@ public class AuthService {
         vt.setUsed(true);
     }
 
+    @Transactional
     public AuthResponse login(LoginRequest request) {
         authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(request.getEmail(), request.getPassword())
         );
-        String token = jwtService.generateToken(request.getEmail());
-        return new AuthResponse(token, "Bearer");
+        User user = userRepository.findByEmail(request.getEmail())
+                .orElseThrow(() -> new IllegalStateException("User not found after authentication"));
+        String accessToken = jwtService.generateToken(request.getEmail());
+        String refreshToken = refreshTokenService.createRefreshToken(user);
+        return new AuthResponse(accessToken, refreshToken, "Bearer");
+    }
+
+    @Transactional
+    public AuthResponse refresh(RefreshTokenRequest request) {
+        String[] newRawTokenHolder = new String[1];
+        User user = refreshTokenService.rotateRefreshToken(request.getRefreshToken(), newRawTokenHolder);
+        String accessToken = jwtService.generateToken(user.getEmail());
+        return new AuthResponse(accessToken, newRawTokenHolder[0], "Bearer");
+    }
+
+    @Transactional
+    public void logout(RefreshTokenRequest request) {
+        refreshTokenService.revokeToken(request.getRefreshToken());
+    }
+
+    @Transactional
+    public String forgotPassword(ForgotPasswordRequest request) {
+        userRepository.findByEmail(request.getEmail()).ifPresent(user -> {
+            String rawToken = UUID.randomUUID().toString();
+            String tokenHash = hashToken(rawToken);
+            LocalDateTime expiresAt = LocalDateTime.now().plusMinutes(RESET_TOKEN_EXPIRY_MINUTES);
+            passwordResetTokenRepository.save(new PasswordResetToken(tokenHash, user, expiresAt));
+            LOG.info("[MOCK EMAIL] Password reset token for {}: {}", user.getEmail(), rawToken);
+        });
+        return "If the email is registered, a reset link has been sent.";
+    }
+
+    @Transactional
+    public void resetPassword(ResetPasswordRequest request) {
+        String tokenHash = hashToken(request.getToken());
+        PasswordResetToken prt = passwordResetTokenRepository.findByTokenHash(tokenHash)
+                .orElseThrow(() -> new IllegalArgumentException("Invalid password reset token"));
+
+        if (prt.isUsed()) {
+            throw new IllegalArgumentException("Password reset token already used");
+        }
+        if (prt.getExpiresAt().isBefore(LocalDateTime.now())) {
+            throw new IllegalArgumentException("Password reset token expired");
+        }
+
+        prt.getUser().setPasswordHash(passwordEncoder.encode(request.getNewPassword()));
+        prt.setUsed(true);
+        refreshTokenService.revokeAllForUser(prt.getUser());
+    }
+
+    private String hashToken(String rawToken) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance(HASH_ALGORITHM);
+            byte[] hash = digest.digest(rawToken.getBytes(StandardCharsets.UTF_8));
+            StringBuilder hexString = new StringBuilder();
+            for (byte b : hash) {
+                String hex = Integer.toHexString(0xff & b);
+                if (hex.length() == 1) {
+                    hexString.append('0');
+                }
+                hexString.append(hex);
+            }
+            return hexString.toString();
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-256 algorithm not available", e);
+        }
     }
 }
