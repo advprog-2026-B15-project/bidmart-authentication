@@ -40,6 +40,7 @@ class AdminControllerIntegrationTest extends BaseIntegrationTest {
         User target = userRepository.findByEmail(TARGET_EMAIL)
                 .orElseThrow(() -> new IllegalStateException("Target user not found"));
         targetUserId = target.getId().toString();
+        assert targetUserId != null;
     }
 
     @Test

@@ -22,6 +22,7 @@ class RefreshTokenIntegrationTest extends BaseIntegrationTest {
     @Order(1)
     void setupRegisterAndVerify() throws Exception {
         registerAndVerify(TEST_EMAIL, "refreshuser", TEST_PASSWORD);
+        assert mockMvc != null;
     }
 
     @Test
