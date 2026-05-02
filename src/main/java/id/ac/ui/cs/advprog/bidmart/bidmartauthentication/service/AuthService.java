@@ -7,6 +7,7 @@ import id.ac.ui.cs.advprog.bidmart.bidmartauthentication.dto.RefreshTokenRequest
 import id.ac.ui.cs.advprog.bidmart.bidmartauthentication.dto.RegisterRequest;
 import id.ac.ui.cs.advprog.bidmart.bidmartauthentication.dto.RegisterResponse;
 import id.ac.ui.cs.advprog.bidmart.bidmartauthentication.dto.ResetPasswordRequest;
+import id.ac.ui.cs.advprog.bidmart.bidmartauthentication.dto.TotpSetupResponse;
 import id.ac.ui.cs.advprog.bidmart.bidmartauthentication.model.PasswordResetToken;
 import id.ac.ui.cs.advprog.bidmart.bidmartauthentication.model.User;
 import id.ac.ui.cs.advprog.bidmart.bidmartauthentication.model.VerificationToken;
@@ -42,6 +43,8 @@ public class AuthService {
     private final JwtService jwtService;
     private final AuthenticationManager authenticationManager;
     private final RefreshTokenService refreshTokenService;
+    private final TotpService totpService;
+    private final UserEventPublisher eventPublisher;
 
     public AuthService(UserRepository userRepository,
                        VerificationTokenRepository tokenRepository,
@@ -49,7 +52,9 @@ public class AuthService {
                        PasswordEncoder passwordEncoder,
                        JwtService jwtService,
                        AuthenticationManager authenticationManager,
-                       RefreshTokenService refreshTokenService) {
+                       RefreshTokenService refreshTokenService,
+                       TotpService totpService,
+                       UserEventPublisher eventPublisher) {
         this.userRepository = userRepository;
         this.tokenRepository = tokenRepository;
         this.passwordResetTokenRepository = passwordResetTokenRepository;
@@ -57,6 +62,8 @@ public class AuthService {
         this.jwtService = jwtService;
         this.authenticationManager = authenticationManager;
         this.refreshTokenService = refreshTokenService;
+        this.totpService = totpService;
+        this.eventPublisher = eventPublisher;
     }
 
     @Transactional
@@ -73,15 +80,12 @@ public class AuthService {
 
         String rawToken = UUID.randomUUID().toString();
         LocalDateTime expiresAt = LocalDateTime.now().plusHours(TOKEN_EXPIRY_HOURS);
-        VerificationToken verificationToken = new VerificationToken(rawToken, user, expiresAt);
-        tokenRepository.save(verificationToken);
+        tokenRepository.save(new VerificationToken(rawToken, user, expiresAt));
 
         LOG.info("[MOCK EMAIL] Verification token for {}: {}", user.getEmail(), rawToken);
+        eventPublisher.publishUserRegistered(user);
 
-        return new RegisterResponse(
-                "Registration successful. Please verify your email.",
-                rawToken
-        );
+        return new RegisterResponse("Registration successful. Please verify your email.", rawToken);
     }
 
     @Transactional
@@ -98,17 +102,45 @@ public class AuthService {
 
         vt.getUser().setEnabled(true);
         vt.setUsed(true);
+        eventPublisher.publishUserEmailVerified(vt.getUser());
     }
 
     @Transactional
-    public AuthResponse login(LoginRequest request) {
+    public AuthResponse login(LoginRequest request, String deviceInfo, String ipAddress) {
         authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(request.getEmail(), request.getPassword())
         );
         User user = userRepository.findByEmail(request.getEmail())
                 .orElseThrow(() -> new IllegalStateException("User not found after authentication"));
-        String accessToken = jwtService.generateToken(request.getEmail());
-        String refreshToken = refreshTokenService.createRefreshToken(user);
+
+        if (user.isTotpEnabled()) {
+            String mfaToken = jwtService.generateMfaToken(user.getEmail());
+            return AuthResponse.requireMfa(mfaToken);
+        }
+
+        String accessToken = jwtService.generateToken(user.getEmail());
+        String refreshToken = refreshTokenService.createRefreshToken(user, deviceInfo, ipAddress);
+        eventPublisher.publishUserLoggedIn(user);
+        return new AuthResponse(accessToken, refreshToken, "Bearer");
+    }
+
+    @Transactional
+    public AuthResponse verifyMfaAndLogin(String mfaToken, String code,
+            String deviceInfo, String ipAddress) {
+        String email = jwtService.extractMfaEmail(mfaToken);
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new IllegalArgumentException("User not found"));
+
+        if (!user.isTotpEnabled() || user.getTotpSecret() == null) {
+            throw new IllegalArgumentException("2FA is not enabled for this account");
+        }
+        if (!totpService.verifyCode(user.getTotpSecret(), code)) {
+            throw new IllegalArgumentException("Invalid TOTP code");
+        }
+
+        String accessToken = jwtService.generateToken(user.getEmail());
+        String refreshToken = refreshTokenService.createRefreshToken(user, deviceInfo, ipAddress);
+        eventPublisher.publishUserLoggedIn(user);
         return new AuthResponse(accessToken, refreshToken, "Bearer");
     }
 
@@ -153,6 +185,44 @@ public class AuthService {
         prt.getUser().setPasswordHash(passwordEncoder.encode(request.getNewPassword()));
         prt.setUsed(true);
         refreshTokenService.revokeAllForUser(prt.getUser());
+        eventPublisher.publishPasswordReset(prt.getUser());
+    }
+
+    @Transactional
+    public TotpSetupResponse setupTotp(String email) {
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new IllegalStateException("User not found"));
+        String secret = totpService.generateSecret();
+        user.setTotpSecret(secret);
+        String otpAuthUrl = totpService.getOtpAuthUrl(secret, email);
+        return new TotpSetupResponse(secret, otpAuthUrl);
+    }
+
+    @Transactional
+    public void confirmTotp(String email, String code) {
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new IllegalStateException("User not found"));
+        if (user.getTotpSecret() == null) {
+            throw new IllegalStateException("TOTP setup not initiated. Call /2fa/setup first.");
+        }
+        if (!totpService.verifyCode(user.getTotpSecret(), code)) {
+            throw new IllegalArgumentException("Invalid TOTP code");
+        }
+        user.setTotpEnabled(true);
+    }
+
+    @Transactional
+    public void disableTotp(String email, String code) {
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new IllegalStateException("User not found"));
+        if (!user.isTotpEnabled()) {
+            throw new IllegalStateException("2FA is not enabled for this account");
+        }
+        if (!totpService.verifyCode(user.getTotpSecret(), code)) {
+            throw new IllegalArgumentException("Invalid TOTP code");
+        }
+        user.setTotpEnabled(false);
+        user.setTotpSecret(null);
     }
 
     private String hashToken(String rawToken) {

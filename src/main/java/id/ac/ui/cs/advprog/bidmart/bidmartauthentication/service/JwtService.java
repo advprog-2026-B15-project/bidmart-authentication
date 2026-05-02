@@ -1,6 +1,7 @@
 package id.ac.ui.cs.advprog.bidmart.bidmartauthentication.service;
 
 import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
 import org.springframework.beans.factory.annotation.Value;
@@ -13,6 +14,10 @@ import java.util.Date;
 
 @Service
 public class JwtService {
+
+    private static final String CLAIM_SCOPE = "scope";
+    private static final String SCOPE_MFA = "mfa";
+    private static final long MFA_TOKEN_EXPIRY_MS = 5L * 60 * 1000;
 
     @Value("${jwt.secret}")
     private String secret;
@@ -33,8 +38,33 @@ public class JwtService {
                 .compact();
     }
 
+    public String generateMfaToken(String email) {
+        return Jwts.builder()
+                .subject(email)
+                .claim(CLAIM_SCOPE, SCOPE_MFA)
+                .issuedAt(new Date())
+                .expiration(new Date(System.currentTimeMillis() + MFA_TOKEN_EXPIRY_MS))
+                .signWith(getSigningKey())
+                .compact();
+    }
+
     public String extractEmail(String token) {
         return extractClaims(token).getSubject();
+    }
+
+    public String extractMfaEmail(String token) {
+        try {
+            Claims claims = extractClaims(token);
+            if (!SCOPE_MFA.equals(claims.get(CLAIM_SCOPE, String.class))) {
+                throw new IllegalArgumentException("Token is not an MFA token");
+            }
+            if (claims.getExpiration().before(new Date())) {
+                throw new IllegalArgumentException("MFA token expired");
+            }
+            return claims.getSubject();
+        } catch (JwtException e) {
+            throw new IllegalArgumentException("Invalid MFA token", e);
+        }
     }
 
     public boolean isTokenValid(String token, UserDetails userDetails) {

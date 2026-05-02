@@ -44,6 +44,12 @@ public class User {
     @Column(nullable = false)
     private boolean locked = false;
 
+    @Column(name = "totp_secret")
+    private String totpSecret;
+
+    @Column(name = "totp_enabled", nullable = false)
+    private boolean totpEnabled = false;
+
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
