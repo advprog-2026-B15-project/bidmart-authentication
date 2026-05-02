@@ -42,10 +42,29 @@ public class RefreshToken {
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
-    public RefreshToken(String tokenHash, User user, LocalDateTime expiresAt) {
+    @Column(nullable = false)
+    private UUID familyId;
+
+    @Column(nullable = false)
+    private boolean revoked = false;
+
+    @Column
+    private LocalDateTime revokedAt;
+
+    @Column(length = 255)
+    private String deviceInfo;
+
+    @Column(length = 45)
+    private String ipAddress;
+
+    public RefreshToken(String tokenHash, User user, LocalDateTime expiresAt,
+            UUID familyId, String deviceInfo, String ipAddress) {
         this.tokenHash = tokenHash;
         this.user = user;
         this.expiresAt = expiresAt;
+        this.familyId = familyId;
+        this.deviceInfo = deviceInfo;
+        this.ipAddress = ipAddress;
     }
 
     @PrePersist

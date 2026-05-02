@@ -58,11 +58,20 @@ components:
       properties:
         accessToken:
           type: string
+          nullable: true
         refreshToken:
           type: string
+          nullable: true
         tokenType:
           type: string
           example: Bearer
+        mfaRequired:
+          type: boolean
+          description: "True when account has 2FA enabled; use mfaToken with /2fa/verify"
+        mfaToken:
+          type: string
+          nullable: true
+          description: "Short-lived token (5 min) to complete MFA verification"
 
     RefreshTokenRequest:
       type: object
@@ -88,6 +97,54 @@ components:
         newPassword:
           type: string
           minLength: 8
+
+    TotpSetupResponse:
+      type: object
+      properties:
+        secret:
+          type: string
+          description: "Base32-encoded TOTP secret — store securely, show to user once"
+        otpAuthUrl:
+          type: string
+          description: "otpauth:// URI suitable for QR code generation"
+
+    TotpCodeRequest:
+      type: object
+      required: [code]
+      properties:
+        code:
+          type: string
+          description: "6-digit TOTP code from authenticator app"
+
+    MfaVerifyRequest:
+      type: object
+      required: [mfaToken, code]
+      properties:
+        mfaToken:
+          type: string
+          description: "mfaToken received from the login response"
+        code:
+          type: string
+          description: "6-digit TOTP code"
+
+    SessionResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        deviceInfo:
+          type: string
+          nullable: true
+        ipAddress:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        expiresAt:
+          type: string
+          format: date-time
 
     UserResponse:
       type: object
@@ -154,7 +211,7 @@ paths:
   /api/auth/login:
     post:
       tags: [Auth]
-      summary: Login and receive access + refresh tokens
+      summary: Login — returns full tokens or mfaRequired flag when 2FA is enabled
       security: []
       requestBody:
         required: true
@@ -164,7 +221,7 @@ paths:
               $ref: '#/components/schemas/LoginRequest'
       responses:
         "200":
-          description: Login successful
+          description: Login successful or MFA step required
           content:
             application/json:
               schema:
@@ -173,6 +230,8 @@ paths:
           description: Invalid credentials
         "403":
           description: Account not verified or locked
+        "429":
+          description: Too many login attempts — try again later
 
   /api/auth/refresh:
     post:
@@ -193,12 +252,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/AuthResponse'
         "401":
-          description: Refresh token invalid or expired
+          description: Refresh token invalid, expired, or reuse detected (family revoked)
 
   /api/auth/logout:
     post:
       tags: [Auth]
-      summary: Revoke refresh token (logout)
+      summary: Revoke refresh token (logout current device)
       security: []
       requestBody:
         required: true
@@ -241,6 +300,122 @@ paths:
           description: Password reset successfully
         "400":
           description: Invalid, expired, or already-used token
+
+  /api/auth/2fa/setup:
+    post:
+      tags: [2FA]
+      summary: Generate TOTP secret and OTP auth URL (must be confirmed before 2FA is active)
+      responses:
+        "200":
+          description: TOTP setup info
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TotpSetupResponse'
+        "401":
+          description: Not authenticated
+
+  /api/auth/2fa/confirm:
+    post:
+      tags: [2FA]
+      summary: Confirm TOTP setup with a valid code — enables 2FA on the account
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TotpCodeRequest'
+      responses:
+        "200":
+          description: 2FA enabled successfully
+        "400":
+          description: Invalid TOTP code
+        "401":
+          description: Not authenticated
+        "409":
+          description: Setup not initiated
+
+  /api/auth/2fa/verify:
+    post:
+      tags: [2FA]
+      summary: Complete MFA login with TOTP code after receiving mfaRequired response
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MfaVerifyRequest'
+      responses:
+        "200":
+          description: MFA verified — full token pair returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        "401":
+          description: Invalid or expired MFA token / wrong TOTP code
+
+  /api/auth/2fa/disable:
+    post:
+      tags: [2FA]
+      summary: Disable 2FA on the account (requires current TOTP code)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TotpCodeRequest'
+      responses:
+        "200":
+          description: 2FA disabled
+        "400":
+          description: Invalid TOTP code
+        "401":
+          description: Not authenticated
+
+  /api/auth/sessions:
+    get:
+      tags: [Sessions]
+      summary: List all active sessions for the current user
+      responses:
+        "200":
+          description: List of active sessions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SessionResponse'
+        "401":
+          description: Not authenticated
+    delete:
+      tags: [Sessions]
+      summary: Revoke all sessions (logout from all devices)
+      responses:
+        "200":
+          description: All sessions revoked
+        "401":
+          description: Not authenticated
+
+  /api/auth/sessions/{sessionId}:
+    delete:
+      tags: [Sessions]
+      summary: Revoke a specific session by ID
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Session revoked
+        "401":
+          description: Not authenticated
+        "404":
+          description: Session not found or does not belong to user
 
   /api/users/me:
     get:
