@@ -5,7 +5,6 @@ import dev.samstevens.totp.code.CodeVerifier;
 import dev.samstevens.totp.code.DefaultCodeGenerator;
 import dev.samstevens.totp.code.DefaultCodeVerifier;
 import dev.samstevens.totp.code.HashingAlgorithm;
-import dev.samstevens.totp.exceptions.CodeGenerationException;
 import dev.samstevens.totp.secret.DefaultSecretGenerator;
 import dev.samstevens.totp.secret.SecretGenerator;
 import dev.samstevens.totp.time.SystemTimeProvider;
@@ -45,10 +44,6 @@ public class TotpService {
     }
 
     public boolean verifyCode(String secret, String code) {
-        try {
-            return codeVerifier.isValidCode(secret, code);
-        } catch (CodeGenerationException e) {
-            return false;
-        }
+        return codeVerifier.isValidCode(secret, code);
     }
 }
