@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, 100percent_milestone ]
   pull_request:
-    branches: [ main ]
+    branches: [ main, 100percent_milestone ]
 
 jobs:
   build-and-test:

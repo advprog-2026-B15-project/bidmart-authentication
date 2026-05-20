@@ -29,14 +29,37 @@ jobs:
       - name: Build application JAR
         run: ./gradlew build -x test
 
-      - name: Build Docker image
-        run: docker build -t bidmart-authentication:${{ github.sha }} -t bidmart-authentication:latest .
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Deploy (placeholder)
+      - name: Build and push Docker image
         run: |
-          echo "=================================================="
-          echo "  Deployment step — configure with your target"
-          echo "  Options: push to Docker Hub, deploy to cloud,"
-          echo "           or trigger a remote deployment pipeline"
-          echo "=================================================="
-          echo "Image: bidmart-authentication:${{ github.sha }}"
+          docker build \
+            -t ${{ secrets.DOCKERHUB_USERNAME }}/bidmart-authentication:${{ github.sha }} \
+            -t ${{ secrets.DOCKERHUB_USERNAME }}/bidmart-authentication:latest .
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/bidmart-authentication:${{ github.sha }}
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/bidmart-authentication:latest
+
+      - name: Deploy to EC2
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ubuntu
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            docker pull ${{ secrets.DOCKERHUB_USERNAME }}/bidmart-authentication:latest
+            docker stop bidmart-auth || true
+            docker rm bidmart-auth || true
+            docker run -d \
+              --name bidmart-auth \
+              --restart unless-stopped \
+              -p 8081:8081 \
+              -e DATABASE_URL="${{ secrets.DATABASE_URL }}" \
+              -e DATABASE_USERNAME="${{ secrets.DATABASE_USERNAME }}" \
+              -e DATABASE_PASSWORD="${{ secrets.DATABASE_PASSWORD }}" \
+              -e JWT_SECRET="${{ secrets.JWT_SECRET }}" \
+              -e RABBITMQ_ENABLED=false \
+              ${{ secrets.DOCKERHUB_USERNAME }}/bidmart-authentication:latest

@@ -66,6 +66,7 @@ jacoco {
 
 tasks.withType<Test> {
     useJUnitPlatform()
+    jvmArgs("-XX:+EnableDynamicAgentLoading", "-Xshare:off")
     finalizedBy(tasks.jacocoTestReport)
 }
 
