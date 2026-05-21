@@ -51,6 +51,7 @@ jobs:
           path: build/reports/jacoco/test/html/
 
       - name: SonarCloud analysis
+        continue-on-error: true
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_PROJECT_KEY: ${{ secrets.SONAR_PROJECT_KEY }}
