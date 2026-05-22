@@ -76,6 +76,9 @@ public class AuthService {
         user.setEmail(request.getEmail());
         user.setUsername(request.getUsername());
         user.setPasswordHash(passwordEncoder.encode(request.getPassword()));
+        if (request.getRole() != null && !request.getRole().isEmpty()) {
+            user.setRole(request.getRole());
+        }
         userRepository.save(user);
 
         String rawToken = UUID.randomUUID().toString();
