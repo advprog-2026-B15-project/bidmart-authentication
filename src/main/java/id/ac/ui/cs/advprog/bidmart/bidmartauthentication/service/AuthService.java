@@ -68,12 +68,13 @@ public class AuthService {
 
     @Transactional
     public RegisterResponse register(RegisterRequest request) {
-        if (userRepository.existsByEmail(request.getEmail())) {
-            throw new IllegalArgumentException("Email already registered: " + request.getEmail());
+        String email = request.getEmail().toLowerCase();
+        if (userRepository.existsByEmail(email)) {
+            throw new IllegalArgumentException("Email already registered: " + email);
         }
 
         User user = new User();
-        user.setEmail(request.getEmail());
+        user.setEmail(email);
         user.setUsername(request.getUsername());
         user.setPasswordHash(passwordEncoder.encode(request.getPassword()));
         if (request.getRole() != null && !request.getRole().isEmpty()) {
@@ -110,10 +111,11 @@ public class AuthService {
 
     @Transactional
     public AuthResponse login(LoginRequest request, String deviceInfo, String ipAddress) {
+        String email = request.getEmail().toLowerCase();
         authenticationManager.authenticate(
-                new UsernamePasswordAuthenticationToken(request.getEmail(), request.getPassword())
+                new UsernamePasswordAuthenticationToken(email, request.getPassword())
         );
-        User user = userRepository.findByEmail(request.getEmail())
+        User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new IllegalStateException("User not found after authentication"));
 
         if (user.isTotpEnabled()) {
@@ -162,7 +164,8 @@ public class AuthService {
 
     @Transactional
     public String forgotPassword(ForgotPasswordRequest request) {
-        userRepository.findByEmail(request.getEmail()).ifPresent(user -> {
+        String email = request.getEmail().toLowerCase();
+        userRepository.findByEmail(email).ifPresent(user -> {
             String rawToken = UUID.randomUUID().toString();
             String tokenHash = hashToken(rawToken);
             LocalDateTime expiresAt = LocalDateTime.now().plusMinutes(RESET_TOKEN_EXPIRY_MINUTES);
