@@ -13,6 +13,7 @@ public class UserResponse {
     private final String username;
     private final String role;
     private final boolean enabled;
+    private final boolean totpEnabled;
 
     public UserResponse(User user) {
         this.id = user.getId();
@@ -20,5 +21,6 @@ public class UserResponse {
         this.username = user.getUsername();
         this.role = user.getRole();
         this.enabled = user.isEnabled();
+        this.totpEnabled = user.isTotpEnabled();
     }
 }

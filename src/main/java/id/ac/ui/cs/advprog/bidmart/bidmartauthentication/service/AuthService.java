@@ -123,7 +123,7 @@ public class AuthService {
             return AuthResponse.requireMfa(mfaToken);
         }
 
-        String accessToken = jwtService.generateToken(user.getEmail());
+        String accessToken = jwtService.generateToken(user.getEmail(), user.getRole());
         String refreshToken = refreshTokenService.createRefreshToken(user, deviceInfo, ipAddress);
         eventPublisher.publishUserLoggedIn(user);
         return new AuthResponse(accessToken, refreshToken, "Bearer");
@@ -143,7 +143,7 @@ public class AuthService {
             throw new IllegalArgumentException("Invalid TOTP code");
         }
 
-        String accessToken = jwtService.generateToken(user.getEmail());
+        String accessToken = jwtService.generateToken(user.getEmail(), user.getRole());
         String refreshToken = refreshTokenService.createRefreshToken(user, deviceInfo, ipAddress);
         eventPublisher.publishUserLoggedIn(user);
         return new AuthResponse(accessToken, refreshToken, "Bearer");
@@ -153,7 +153,7 @@ public class AuthService {
     public AuthResponse refresh(RefreshTokenRequest request) {
         String[] newRawTokenHolder = new String[1];
         User user = refreshTokenService.rotateRefreshToken(request.getRefreshToken(), newRawTokenHolder);
-        String accessToken = jwtService.generateToken(user.getEmail());
+        String accessToken = jwtService.generateToken(user.getEmail(), user.getRole());
         return new AuthResponse(accessToken, newRawTokenHolder[0], "Bearer");
     }
 
