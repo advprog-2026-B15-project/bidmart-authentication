@@ -12,6 +12,8 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import org.springframework.cache.annotation.CacheEvict;
+
 import java.util.Map;
 import java.util.UUID;
 
@@ -32,6 +34,7 @@ public class AdminController {
         this.eventPublisher = eventPublisher;
     }
 
+    @CacheEvict(value = "users", allEntries = true)
     @PostMapping("/users/{id}/disable")
     public ResponseEntity<Map<String, String>> disableUser(
             @PathVariable UUID id,

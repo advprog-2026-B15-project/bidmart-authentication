@@ -14,7 +14,9 @@ import id.ac.ui.cs.advprog.bidmart.bidmartauthentication.model.VerificationToken
 import id.ac.ui.cs.advprog.bidmart.bidmartauthentication.repository.PasswordResetTokenRepository;
 import id.ac.ui.cs.advprog.bidmart.bidmartauthentication.repository.UserRepository;
 import id.ac.ui.cs.advprog.bidmart.bidmartauthentication.repository.VerificationTokenRepository;
+import io.micrometer.core.annotation.Timed;
 import org.slf4j.Logger;
+import org.springframework.cache.annotation.CacheEvict;
 import org.slf4j.LoggerFactory;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -66,6 +68,7 @@ public class AuthService {
         this.eventPublisher = eventPublisher;
     }
 
+    @Timed(value = "auth.register", description = "Time taken to register a new user")
     @Transactional
     public RegisterResponse register(RegisterRequest request) {
         String email = request.getEmail().toLowerCase();
@@ -92,6 +95,7 @@ public class AuthService {
         return new RegisterResponse("Registration successful. Please verify your email.", rawToken);
     }
 
+    @CacheEvict(value = "users", allEntries = true)
     @Transactional
     public void verifyEmail(String rawToken) {
         VerificationToken vt = tokenRepository.findByToken(rawToken)
@@ -109,6 +113,7 @@ public class AuthService {
         eventPublisher.publishUserEmailVerified(vt.getUser());
     }
 
+    @Timed(value = "auth.login", description = "Time taken to authenticate a user")
     @Transactional
     public AuthResponse login(LoginRequest request, String deviceInfo, String ipAddress) {
         String email = request.getEmail().toLowerCase();
@@ -129,6 +134,7 @@ public class AuthService {
         return new AuthResponse(accessToken, refreshToken, "Bearer");
     }
 
+    @Timed(value = "auth.mfa.verify", description = "Time taken to verify MFA and complete login")
     @Transactional
     public AuthResponse verifyMfaAndLogin(String mfaToken, String code,
             String deviceInfo, String ipAddress) {
@@ -175,6 +181,7 @@ public class AuthService {
         return "If the email is registered, a reset link has been sent.";
     }
 
+    @CacheEvict(value = "users", allEntries = true)
     @Transactional
     public void resetPassword(ResetPasswordRequest request) {
         String tokenHash = hashToken(request.getToken());
@@ -204,6 +211,7 @@ public class AuthService {
         return new TotpSetupResponse(secret, otpAuthUrl);
     }
 
+    @CacheEvict(value = "users", key = "#email")
     @Transactional
     public void confirmTotp(String email, String code) {
         User user = userRepository.findByEmail(email)
@@ -217,6 +225,7 @@ public class AuthService {
         user.setTotpEnabled(true);
     }
 
+    @CacheEvict(value = "users", key = "#email")
     @Transactional
     public void disableTotp(String email, String code) {
         User user = userRepository.findByEmail(email)

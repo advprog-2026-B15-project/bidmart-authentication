@@ -1,0 +1,123 @@
+{
+  "title": "BidMart Auth Service",
+  "uid": "bidmart-auth",
+  "schemaVersion": 38,
+  "version": 1,
+  "refresh": "10s",
+  "time": { "from": "now-30m", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "title": "HTTP Request Rate (req/s)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "targets": [
+        {
+          "datasource": "Prometheus",
+          "expr": "sum(rate(http_server_requests_seconds_count{job=\"bidmart-auth\"}[1m])) by (uri, method)",
+          "legendFormat": "{{method}} {{uri}}"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "HTTP Response Time p95 (ms)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "targets": [
+        {
+          "datasource": "Prometheus",
+          "expr": "histogram_quantile(0.95, sum(rate(http_server_requests_seconds_bucket{job=\"bidmart-auth\"}[1m])) by (le, uri)) * 1000",
+          "legendFormat": "p95 {{uri}}"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Auth Login Duration (avg ms)",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 8 },
+      "options": { "colorMode": "background", "graphMode": "area" },
+      "targets": [
+        {
+          "datasource": "Prometheus",
+          "expr": "rate(auth_login_seconds_sum{job=\"bidmart-auth\"}[5m]) / rate(auth_login_seconds_count{job=\"bidmart-auth\"}[5m]) * 1000",
+          "legendFormat": "Avg Login (ms)"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "Auth Register Duration (avg ms)",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 8 },
+      "options": { "colorMode": "background", "graphMode": "area" },
+      "targets": [
+        {
+          "datasource": "Prometheus",
+          "expr": "rate(auth_register_seconds_sum{job=\"bidmart-auth\"}[5m]) / rate(auth_register_seconds_count{job=\"bidmart-auth\"}[5m]) * 1000",
+          "legendFormat": "Avg Register (ms)"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "Token Rotation Duration (avg ms)",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 8 },
+      "options": { "colorMode": "background", "graphMode": "area" },
+      "targets": [
+        {
+          "datasource": "Prometheus",
+          "expr": "rate(auth_token_rotate_seconds_sum{job=\"bidmart-auth\"}[5m]) / rate(auth_token_rotate_seconds_count{job=\"bidmart-auth\"}[5m]) * 1000",
+          "legendFormat": "Avg Token Rotate (ms)"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "title": "Total Auth Requests",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 8 },
+      "options": { "colorMode": "value", "graphMode": "area" },
+      "targets": [
+        {
+          "datasource": "Prometheus",
+          "expr": "sum(http_server_requests_seconds_count{job=\"bidmart-auth\"})",
+          "legendFormat": "Total Requests"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "title": "JVM Memory Used (MB)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 12 },
+      "targets": [
+        {
+          "datasource": "Prometheus",
+          "expr": "jvm_memory_used_bytes{job=\"bidmart-auth\", area=\"heap\"} / 1024 / 1024",
+          "legendFormat": "Heap Used (MB)"
+        },
+        {
+          "datasource": "Prometheus",
+          "expr": "jvm_memory_max_bytes{job=\"bidmart-auth\", area=\"heap\"} / 1024 / 1024",
+          "legendFormat": "Heap Max (MB)"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "title": "HTTP Error Rate (4xx/5xx)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 12 },
+      "targets": [
+        {
+          "datasource": "Prometheus",
+          "expr": "sum(rate(http_server_requests_seconds_count{job=\"bidmart-auth\", status=~\"4..|5..\"}[1m])) by (status, uri)",
+          "legendFormat": "{{status}} {{uri}}"
+        }
+      ]
+    }
+  ]
+}

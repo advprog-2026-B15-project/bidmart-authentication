@@ -4,6 +4,7 @@ import id.ac.ui.cs.advprog.bidmart.bidmartauthentication.dto.SessionResponse;
 import id.ac.ui.cs.advprog.bidmart.bidmartauthentication.model.RefreshToken;
 import id.ac.ui.cs.advprog.bidmart.bidmartauthentication.model.User;
 import id.ac.ui.cs.advprog.bidmart.bidmartauthentication.repository.RefreshTokenRepository;
+import io.micrometer.core.annotation.Timed;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -31,6 +32,7 @@ public class RefreshTokenService {
         this.refreshTokenRepository = refreshTokenRepository;
     }
 
+    @Timed(value = "auth.token.create", description = "Time taken to create a refresh token")
     @Transactional
     public String createRefreshToken(User user, String deviceInfo, String ipAddress) {
         String rawToken = UUID.randomUUID().toString();
@@ -42,6 +44,7 @@ public class RefreshTokenService {
         return rawToken;
     }
 
+    @Timed(value = "auth.token.rotate", description = "Time taken to rotate a refresh token")
     @Transactional
     public User rotateRefreshToken(String rawToken, String[] newRawTokenHolder) {
         String tokenHash = hashToken(rawToken);

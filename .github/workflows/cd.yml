@@ -50,7 +50,12 @@ jobs:
           username: ubuntu
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
-            docker pull ${{ secrets.DOCKERHUB_USERNAME }}/bidmart-authentication:latest
+            # Simpan tag yang sedang berjalan sebagai "previous" sebelum deploy
+            CURRENT_TAG=$(docker inspect bidmart-auth --format='{{index .Config.Image}}' 2>/dev/null || echo "none")
+            echo "Previous image: $CURRENT_TAG"
+            echo "$CURRENT_TAG" > /home/ubuntu/bidmart-auth-previous-tag.txt
+
+            docker pull ${{ secrets.DOCKERHUB_USERNAME }}/bidmart-authentication:${{ github.sha }}
             docker stop bidmart-auth || true
             docker rm bidmart-auth || true
             docker run -d \
@@ -64,4 +69,28 @@ jobs:
               -e RABBITMQ_ENABLED=false \
               -e SPRING_JPA_HIBERNATE_DDL_AUTO=update \
               -e SPRING_FLYWAY_ENABLED=false \
-              ${{ secrets.DOCKERHUB_USERNAME }}/bidmart-authentication:latest
+              ${{ secrets.DOCKERHUB_USERNAME }}/bidmart-authentication:${{ github.sha }}
+
+            # Health check setelah deploy — rollback otomatis jika gagal
+            sleep 15
+            if ! curl -sf http://localhost:8081/actuator/health | grep -q '"status":"UP"'; then
+              echo "Health check FAILED — rolling back to previous version"
+              docker stop bidmart-auth || true
+              docker rm bidmart-auth || true
+              PREV_TAG=$(cat /home/ubuntu/bidmart-auth-previous-tag.txt)
+              docker run -d \
+                --name bidmart-auth \
+                --restart unless-stopped \
+                -p 8081:8081 \
+                -e DATABASE_URL="${{ secrets.DATABASE_URL }}" \
+                -e DATABASE_USERNAME="${{ secrets.DATABASE_USERNAME }}" \
+                -e DATABASE_PASSWORD="${{ secrets.DATABASE_PASSWORD }}" \
+                -e JWT_SECRET="${{ secrets.JWT_SECRET }}" \
+                -e RABBITMQ_ENABLED=false \
+                -e SPRING_JPA_HIBERNATE_DDL_AUTO=update \
+                -e SPRING_FLYWAY_ENABLED=false \
+                "$PREV_TAG"
+              echo "Rollback complete — running $PREV_TAG"
+              exit 1
+            fi
+            echo "Deploy successful — running ${{ github.sha }}"

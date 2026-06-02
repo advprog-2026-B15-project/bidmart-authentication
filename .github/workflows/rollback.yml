@@ -1,0 +1,60 @@
+name: Rollback Deployment
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: 'Git SHA or image tag to roll back to (e.g. abc1234)'
+        required: true
+        type: string
+
+jobs:
+  rollback:
+    name: Rollback to ${{ github.event.inputs.image_tag }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Verify image exists on Docker Hub
+        run: |
+          docker pull ${{ secrets.DOCKERHUB_USERNAME }}/bidmart-authentication:${{ github.event.inputs.image_tag }}
+          echo "Image verified — proceeding with rollback"
+
+      - name: Deploy previous version to EC2
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ubuntu
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            echo "Rolling back to: ${{ github.event.inputs.image_tag }}"
+
+            docker pull ${{ secrets.DOCKERHUB_USERNAME }}/bidmart-authentication:${{ github.event.inputs.image_tag }}
+            docker stop bidmart-auth || true
+            docker rm bidmart-auth || true
+            docker run -d \
+              --name bidmart-auth \
+              --restart unless-stopped \
+              -p 8081:8081 \
+              -e DATABASE_URL="${{ secrets.DATABASE_URL }}" \
+              -e DATABASE_USERNAME="${{ secrets.DATABASE_USERNAME }}" \
+              -e DATABASE_PASSWORD="${{ secrets.DATABASE_PASSWORD }}" \
+              -e JWT_SECRET="${{ secrets.JWT_SECRET }}" \
+              -e RABBITMQ_ENABLED=false \
+              -e SPRING_JPA_HIBERNATE_DDL_AUTO=update \
+              -e SPRING_FLYWAY_ENABLED=false \
+              ${{ secrets.DOCKERHUB_USERNAME }}/bidmart-authentication:${{ github.event.inputs.image_tag }}
+
+            # Health check setelah rollback
+            sleep 15
+            if curl -sf http://localhost:8081/actuator/health | grep -q '"status":"UP"'; then
+              echo "Rollback successful — app is UP"
+            else
+              echo "WARNING: App health check failed after rollback"
+              exit 1
+            fi
