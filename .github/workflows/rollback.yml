@@ -23,35 +23,39 @@ jobs:
       - name: Verify image exists on Docker Hub
         run: |
           docker pull ${{ secrets.DOCKERHUB_USERNAME }}/bidmart-authentication:${{ github.event.inputs.image_tag }}
-          echo "Image verified — proceeding with rollback"
 
       - name: Deploy previous version to EC2
         uses: appleboy/ssh-action@v1
+        env:
+          DB_URL: ${{ secrets.DATABASE_URL }}
+          DB_USER: ${{ secrets.DATABASE_USERNAME }}
+          DB_PASS: ${{ secrets.DATABASE_PASSWORD }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          DOCKER_USER: ${{ secrets.DOCKERHUB_USERNAME }}
+          IMAGE_TAG: ${{ github.event.inputs.image_tag }}
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ubuntu
           key: ${{ secrets.EC2_SSH_KEY }}
+          envs: DB_URL,DB_USER,DB_PASS,JWT_SECRET,DOCKER_USER,IMAGE_TAG
           script: |
-            echo "Rolling back to: ${{ github.event.inputs.image_tag }}"
-
-            docker pull ${{ secrets.DOCKERHUB_USERNAME }}/bidmart-authentication:${{ github.event.inputs.image_tag }}
+            docker pull "$DOCKER_USER/bidmart-authentication:$IMAGE_TAG"
             docker stop bidmart-auth || true
             docker rm bidmart-auth || true
             docker run -d \
               --name bidmart-auth \
               --restart unless-stopped \
               -p 8081:8081 \
-              -e DATABASE_URL="${{ secrets.DATABASE_URL }}" \
-              -e DATABASE_USERNAME="${{ secrets.DATABASE_USERNAME }}" \
-              -e DATABASE_PASSWORD="${{ secrets.DATABASE_PASSWORD }}" \
-              -e JWT_SECRET="${{ secrets.JWT_SECRET }}" \
+              -e DATABASE_URL="$DB_URL" \
+              -e DATABASE_USERNAME="$DB_USER" \
+              -e DATABASE_PASSWORD="$DB_PASS" \
+              -e JWT_SECRET="$JWT_SECRET" \
               -e RABBITMQ_ENABLED=false \
               -e SPRING_JPA_HIBERNATE_DDL_AUTO=update \
               -e SPRING_FLYWAY_ENABLED=false \
-              ${{ secrets.DOCKERHUB_USERNAME }}/bidmart-authentication:${{ github.event.inputs.image_tag }}
+              "$DOCKER_USER/bidmart-authentication:$IMAGE_TAG"
 
-            # Health check setelah rollback
-            sleep 15
+            sleep 30
             if curl -sf http://localhost:8081/actuator/health | grep -q '"status":"UP"'; then
               echo "Rollback successful — app is UP"
             else
