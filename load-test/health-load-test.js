@@ -4,7 +4,6 @@ import { Rate } from 'k6/metrics';
 
 const errorRate = new Rate('error_rate');
 
-// Test ringan: health check endpoint untuk ukur baseline throughput
 export const options = {
   stages: [
     { duration: '15s', target: 20 },

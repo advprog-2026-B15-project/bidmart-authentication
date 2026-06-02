@@ -7,19 +7,18 @@ const loginDuration = new Trend('login_duration_ms');
 
 export const options = {
   stages: [
-    { duration: '30s', target: 5 },   // ramp up: 0 → 5 users
-    { duration: '1m',  target: 10 },  // steady: 10 concurrent users
-    { duration: '30s', target: 0 },   // ramp down
+    { duration: '30s', target: 5 },
+    { duration: '1m',  target: 10 },
+    { duration: '30s', target: 0 },
   ],
   thresholds: {
-    http_req_duration: ['p(95)<500'],  // 95% request harus < 500ms
-    error_rate: ['rate<0.1'],          // error rate < 10%
+    http_req_duration: ['p(95)<500'],
+    error_rate: ['rate<0.1'],
   },
 };
 
 const BASE_URL = 'http://localhost:8081';
 
-// Ganti dengan akun yang sudah terdaftar dan terverifikasi
 const TEST_EMAIL = 'test@demo.com';
 const TEST_PASSWORD = 'Test1234!';
 
