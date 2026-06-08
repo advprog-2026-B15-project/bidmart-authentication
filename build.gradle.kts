@@ -55,8 +55,6 @@ dependencies {
     implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.6")
     implementation("dev.samstevens.totp:totp:1.7.1")
     implementation("com.bucket4j:bucket4j-core:8.10.1")
-    implementation("org.springframework.boot:spring-boot-starter-amqp")
-    testImplementation("org.springframework.amqp:spring-rabbit-test")
 }
 
 checkstyle {

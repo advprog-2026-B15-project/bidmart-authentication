@@ -3,13 +3,11 @@ package id.ac.ui.cs.advprog.bidmart.bidmartauthentication.service;
 import id.ac.ui.cs.advprog.bidmart.bidmartauthentication.model.User;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 import java.util.UUID;
 
 @Component
-@ConditionalOnProperty(name = "spring.rabbitmq.enabled", havingValue = "false", matchIfMissing = true)
 public class LoggingUserEventPublisher implements UserEventPublisher {
 
     private static final Logger LOG = LoggerFactory.getLogger(LoggingUserEventPublisher.class);
